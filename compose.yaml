@@ -1,0 +1,87 @@
+name: learn-java
+
+x-java-service: &java-service
+  image: maven:3.9-eclipse-temurin-25
+  environment:
+    MAVEN_OPTS: -Dmaven.repo.local=/root/.m2/repository -XX:MaxRAMPercentage=75
+  volumes:
+    - ./:/workspace
+    - maven-cache:/root/.m2
+
+services:
+  java:
+    <<: *java-service
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+
+  app:
+    <<: *java-service
+    profiles: ["app"]
+    working_dir: /workspace/projects/order-admin-api
+    command: ["mvn", "spring-boot:run"]
+    ports:
+      - "${APP_HOST_PORT:-8081}:8080"
+
+  mysql:
+    image: mysql:8.4
+    profiles: ["data", "ruoyi"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-local-only}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-learn_java}
+      MYSQL_USER: ${MYSQL_USER:-learner}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-learner-local-only}
+    ports:
+      - "${MYSQL_HOST_PORT:-13308}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/10-learning.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7.4-alpine
+    profiles: ["data", "ruoyi"]
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6381}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:4.2-management
+    profiles: ["messaging"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-learner}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-learner-local-only}
+    ports:
+      - "${RABBITMQ_HOST_PORT:-5673}:5672"
+      - "${RABBITMQ_MANAGEMENT_HOST_PORT:-15673}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+
+  node:
+    image: node:22-bookworm-slim
+    profiles: ["frontend"]
+    working_dir: /workspace/stages/09-ruoyi
+    command: ["sleep", "infinity"]
+    volumes:
+      - ./:/workspace
+
+volumes:
+  maven-cache:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:

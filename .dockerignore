@@ -1,0 +1,8 @@
+.git
+.env
+.idea
+.vscode
+**/target
+**/node_modules
+**/dist
+stages/09-ruoyi/app
